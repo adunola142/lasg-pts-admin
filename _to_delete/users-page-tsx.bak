@@ -1,0 +1,447 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { apiClient, ApiException } from "@/lib/apiClient";
+import { ALL_ROLES, ManagedUser, PaginatedResult, Role, roleLabel } from "@/lib/types";
+import { Pagination } from "@/components/Pagination";
+import { Modal } from "@/components/Modal";
+import { Card, StatTile } from "@/components/Card";
+import { PageHeader } from "@/components/PageHeader";
+import { Avatar } from "@/components/Avatar";
+import { SegmentedTabs } from "@/components/SegmentedTabs";
+import { useAuthStore } from "@/store/authStore";
+import { toast } from "@/store/toastStore";
+import {
+  KeyRound,
+  Plus,
+  Search,
+  ShieldCheck,
+  UserCheck,
+  UserX,
+  Users as UsersIcon,
+} from "lucide-react";
+
+const LIMIT = 20;
+type ActiveFilter = "ALL" | "ACTIVE" | "INACTIVE";
+const ACTIVE_FILTERS: ActiveFilter[] = ["ALL", "ACTIVE", "INACTIVE"];
+
+export default function UsersPage() {
+  const { user: me } = useAuthStore();
+  const canManage = me?.role === "ADMIN";
+
+  const [data, setData] = useState<PaginatedResult<ManagedUser> | null>(null);
+  const [search, setSearch] = useState("");
+  const [role, setRole] = useState<Role | "ALL">("ALL");
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>("ALL");
+  const [skip, setSkip] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [passwordTarget, setPasswordTarget] = useState<ManagedUser | null>(null);
+  const [statusTarget, setStatusTarget] = useState<ManagedUser | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await apiClient.get<PaginatedResult<ManagedUser>>("/users", {
+        limit: LIMIT,
+        skip,
+        ...(search.trim() ? { search: search.trim() } : {}),
+        ...(role !== "ALL" ? { role } : {}),
+        ...(activeFilter !== "ALL" ? { isActive: activeFilter === "ACTIVE" } : {}),
+      });
+      setData(result);
+    } catch {
+      toast.critical("Couldn't load users — check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [search, role, activeFilter, skip]);
+
+  useEffect(() => {
+    // load() sets loading/error state synchronously before its first
+    // await — the standard fetch-on-mount-or-filter-change pattern.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
+
+  const rows = data?.items ?? [];
+
+  return (
+    <div>
+      <PageHeader
+        icon={UsersIcon}
+        title="Users"
+        subtitle={
+          canManage
+            ? "Manage portal and field-agent accounts, roles, and access."
+            : "Portal and field-agent accounts. Read-only for your role."
+        }
+        tone="violet"
+        action={
+          canManage ? (
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-brand-secondary px-4 py-2.5 text-sm font-semibold text-white"
+            >
+              <Plus size={16} />
+              Create User
+            </button>
+          ) : undefined
+        }
+      />
+
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1">
+          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+          <input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setSkip(0);
+            }}
+            placeholder="Search by name or phone…"
+            className="w-full rounded-xl border border-border bg-surface py-2.5 pl-10 pr-4 text-sm text-foreground outline-none transition focus:border-brand-secondary focus:ring-1 focus:ring-brand-secondary"
+          />
+        </div>
+
+        <select
+          value={role}
+          onChange={(e) => {
+            setRole(e.target.value as Role | "ALL");
+            setSkip(0);
+          }}
+          className="rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-foreground outline-none focus:border-brand-secondary focus:ring-1 focus:ring-brand-secondary"
+        >
+          <option value="ALL">All roles</option>
+          {ALL_ROLES.map((r) => (
+            <option key={r} value={r}>
+              {roleLabel(r)}
+            </option>
+          ))}
+        </select>
+
+        <SegmentedTabs
+          options={ACTIVE_FILTERS}
+          value={activeFilter}
+          onChange={(v) => {
+            setActiveFilter(v);
+            setSkip(0);
+          }}
+          getLabel={(v) => (v === "ALL" ? "All" : v === "ACTIVE" ? "Active" : "Inactive")}
+        />
+      </div>
+
+      <Card className="mt-4 overflow-hidden p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-muted dark:bg-white/5">
+              <tr>
+                <th className="px-5 py-3.5">Name</th>
+                <th className="px-5 py-3.5">Phone</th>
+                <th className="px-5 py-3.5">Role</th>
+                <th className="px-5 py-3.5">Status</th>
+                <th className="px-5 py-3.5">Joined</th>
+                {canManage && <th className="px-5 py-3.5">Actions</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {loading && (
+                <tr>
+                  <td colSpan={6} className="px-5 py-6 text-center text-muted">
+                    Loading…
+                  </td>
+                </tr>
+              )}
+              {!loading && rows.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-5 py-6 text-center text-muted">
+                    No users match these filters.
+                  </td>
+                </tr>
+              )}
+              {!loading &&
+                rows.map((row) => {
+                  const isSelf = row.id === me?.id;
+                  return (
+                    <tr key={row.id} className="transition hover:bg-foreground/[0.02]">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={row.fullName} />
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-foreground">{row.fullName}</p>
+                            {row.email && <p className="truncate text-xs text-muted">{row.email}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-foreground">{row.phoneNumber}</td>
+                      <td className="px-5 py-4">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-foreground/[0.06] px-2.5 py-1 text-xs font-semibold text-foreground">
+                          <ShieldCheck size={12} />
+                          {roleLabel(row.role)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold text-white ${
+                            row.isActive ? "bg-status-good" : "bg-gray-400 dark:bg-white/20"
+                          }`}
+                        >
+                          {row.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-muted">{new Date(row.createdAt).toLocaleDateString()}</td>
+                      {canManage && (
+                        <td className="px-5 py-4">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setPasswordTarget(row)}
+                              title="Reset password"
+                              className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-foreground/[0.04]"
+                            >
+                              <KeyRound size={13} />
+                              Reset
+                            </button>
+                            <button
+                              onClick={() => !isSelf && setStatusTarget(row)}
+                              disabled={isSelf}
+                              title={isSelf ? "You can't deactivate your own account" : row.isActive ? "Deactivate" : "Reactivate"}
+                              className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
+                                row.isActive
+                                  ? "border-status-critical/30 text-status-critical hover:bg-status-critical/10"
+                                  : "border-status-good/30 text-status-good hover:bg-status-good/10"
+                              }`}
+                            >
+                              {row.isActive ? <UserX size={13} /> : <UserCheck size={13} />}
+                              {row.isActive ? "Deactivate" : "Reactivate"}
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+        {data && <Pagination total={data.total} limit={LIMIT} skip={skip} onSkipChange={setSkip} />}
+      </Card>
+
+      {createOpen && <CreateUserModal onClose={() => setCreateOpen(false)} onCreated={load} />}
+      {passwordTarget && (
+        <ResetPasswordModal target={passwordTarget} onClose={() => setPasswordTarget(null)} />
+      )}
+      {statusTarget && (
+        <ToggleStatusModal target={statusTarget} onClose={() => setStatusTarget(null)} onChanged={load} />
+      )}
+    </div>
+  );
+}
+
+function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [fullName, setFullName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<Role>("SUPERVISOR");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    if (!fullName.trim() || !phoneNumber.trim() || password.length < 8) {
+      toast.warning("Fill in name, phone, and a password of at least 8 characters.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await apiClient.post("/users", {
+        fullName: fullName.trim(),
+        phoneNumber: phoneNumber.trim(),
+        ...(email.trim() ? { email: email.trim() } : {}),
+        password,
+        role,
+      });
+      toast.success(`${fullName.trim()}'s account was created.`);
+      onCreated();
+      onClose();
+    } catch (e) {
+      toast.critical(e instanceof ApiException ? e.message : "Couldn't create the account.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title="Create User" onClose={onClose}>
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs font-medium text-muted">Full name</label>
+          <input
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand-secondary focus:ring-1 focus:ring-brand-secondary"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted">Phone number</label>
+          <input
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand-secondary focus:ring-1 focus:ring-brand-secondary"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted">Email (optional)</label>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand-secondary focus:ring-1 focus:ring-brand-secondary"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted">Temporary password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="At least 8 characters"
+            className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand-secondary focus:ring-1 focus:ring-brand-secondary"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted">Role</label>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as Role)}
+            className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand-secondary focus:ring-1 focus:ring-brand-secondary"
+          >
+            {ALL_ROLES.map((r) => (
+              <option key={r} value={r}>
+                {roleLabel(r)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground">
+          Cancel
+        </button>
+        <button
+          onClick={submit}
+          disabled={submitting}
+          className="rounded-lg bg-brand-secondary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {submitting ? "Creating…" : "Create Account"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function ResetPasswordModal({ target, onClose }: { target: ManagedUser; onClose: () => void }) {
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    if (password.length < 8) {
+      toast.warning("The new password must be at least 8 characters.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await apiClient.patch(`/users/${target.id}/password`, { newPassword: password });
+      toast.success(`${target.fullName}'s password was reset.`);
+      onClose();
+    } catch (e) {
+      toast.critical(e instanceof ApiException ? e.message : "Couldn't reset the password.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title="Reset Password" onClose={onClose}>
+      <p className="text-sm text-muted">
+        Set a new password for <span className="font-semibold text-foreground">{target.fullName}</span>. Share it
+        with them directly — they are not notified automatically.
+      </p>
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="New password (min 8 characters)"
+        className="mt-3 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand-secondary focus:ring-1 focus:ring-brand-secondary"
+      />
+      <div className="mt-4 flex justify-end gap-2">
+        <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground">
+          Cancel
+        </button>
+        <button
+          onClick={submit}
+          disabled={submitting}
+          className="rounded-lg bg-brand-secondary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {submitting ? "Saving…" : "Reset Password"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function ToggleStatusModal({
+  target,
+  onClose,
+  onChanged,
+}: {
+  target: ManagedUser;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const willDeactivate = target.isActive;
+
+  async function submit() {
+    setSubmitting(true);
+    try {
+      await apiClient.patch(`/users/${target.id}/status`, { isActive: !target.isActive });
+      toast.success(`${target.fullName} was ${willDeactivate ? "deactivated" : "reactivated"}.`);
+      onChanged();
+      onClose();
+    } catch (e) {
+      toast.critical(e instanceof ApiException ? e.message : "Couldn't update this account.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title={willDeactivate ? "Deactivate User" : "Reactivate User"} onClose={onClose}>
+      <p className="text-sm text-muted">
+        {willDeactivate ? (
+          <>
+            <span className="font-semibold text-foreground">{target.fullName}</span> will no longer be able to log
+            in until reactivated.
+          </>
+        ) : (
+          <>
+            <span className="font-semibold text-foreground">{target.fullName}</span> will be able to log in again.
+          </>
+        )}
+      </p>
+      <div className="mt-4 flex justify-end gap-2">
+        <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground">
+          Cancel
+        </button>
+        <button
+          onClick={submit}
+          disabled={submitting}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 ${
+            willDeactivate ? "bg-status-critical" : "bg-status-good"
+          }`}
+        >
+          {submitting ? "Saving…" : willDeactivate ? "Confirm Deactivate" : "Confirm Reactivate"}
+        </button>
+      </div>
+    </Modal>
+  );
+}

@@ -1,26 +1,115 @@
 @import "tailwindcss";
 
+/* Tailwind v4's documented class-based dark mode: lets us write
+   `dark:bg-white/5` etc. anywhere, toggled by adding/removing a
+   `dark` class on <html> (see src/lib/theme.ts) instead of only
+   following the OS preference. */
+@custom-variant dark (&:is(.dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f8fa;
+  --foreground: #11161d;
+  --surface: #ffffff;
+  --border: #e2e5ea;
+  --muted: #6b7280;
+
+  /* Same brand colors as lasg_pts_mobile (AppColors) — keeps the web
+     portal and mobile app feeling like one product. */
+  --brand-primary: #0e1c2f; /* AppColors.primaryContainer */
+  --brand-secondary: #006c47; /* AppColors.secondary */
+
+  /* Sidebar panel — plain white in light mode, flips to pure black in
+     dark mode (separate from brand-primary, which toasts still use as
+     a fixed dark navy). Text inside the sidebar reads via the normal
+     --foreground/--muted tokens, which already flip correctly. */
+  --sidebar: #ffffff;
+
+  /* Status colors — reserved for state, never reused as generic series
+     colors (good / warning / critical). */
+  --status-good: #16a34a;
+  --status-good-bg: #ecfdf3;
+  --status-warning: #b45309;
+  --status-warning-bg: #fffaeb;
+  --status-critical: #dc2626;
+  --status-critical-bg: #fef3f2;
+}
+
+/* Dark palette — near-black surfaces with a brighter, more saturated
+   accent (brand-secondary) so primary buttons and active states still
+   pop against the dark background, matching the reference dashboard's
+   look. Every component already reads color through these tokens
+   (Card, Pagination, Modal, the sidebar, every page), so overriding
+   the values here is enough to re-skin the whole portal — no
+   per-component dark: classes needed except for a handful of
+   hardcoded Tailwind grays (bg-gray-50/100) called out where used. */
+.dark {
+  --background: #0a0b0d;
+  --foreground: #f5f6f7;
+  --surface: #131519;
+  --border: #242730;
+  --muted: #8b92a0;
+
+  --brand-primary: #0b1420;
+  --brand-secondary: #12b76a;
+
+  /* Sidebar flips to pure black in dark mode. */
+  --sidebar: #000000;
+
+
+  --status-good: #34d399;
+  --status-good-bg: rgba(16, 185, 129, 0.14);
+  --status-warning: #fbbf24;
+  --status-warning-bg: rgba(251, 191, 36, 0.14);
+  --status-critical: #f87171;
+  --status-critical-bg: rgba(248, 113, 113, 0.14);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-secondary: var(--brand-secondary);
+  --color-sidebar: var(--sidebar);
+  --color-status-good: var(--status-good);
+  --color-status-good-bg: var(--status-good-bg);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-critical: var(--status-critical);
+  --color-status-critical-bg: var(--status-critical-bg);
+  --font-sans: var(--font-manrope);
+  --font-heading: var(--font-plus-jakarta-sans);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-manrope), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+/* Same two Google Fonts as lasg_pts_mobile's AppTheme: Plus Jakarta
+   Sans for headings, Manrope for body text (see
+   lib/core/theme/app_theme.dart). Applied via the .font-heading
+   utility on titles rather than globally swapping every element, since
+   most of this UI is body-weight text. */
+.font-heading {
+  font-family: var(--font-plus-jakarta-sans), -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+@keyframes toast-drop-in {
+  from {
+    transform: translateY(-16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.toast-drop-in {
+  animation: toast-drop-in 220ms ease-out;
 }
