@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiClient, ApiException } from "@/lib/apiClient";
 import { ALL_ROLES, ManagedUser, PaginatedResult, Role, roleLabel } from "@/lib/types";
 import { Pagination } from "@/components/Pagination";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Modal } from "@/components/Modal";
 import {
   DatePill,
@@ -367,8 +368,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
         </div>
         <div>
           <label className="text-xs font-medium text-muted">Temporary password</label>
-          <input
-            type="password"
+          <PasswordInput
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="At least 8 characters"
@@ -433,8 +433,7 @@ function ResetPasswordModal({ target, onClose }: { target: ManagedUser; onClose:
         Set a new password for <span className="font-semibold text-foreground">{target.fullName}</span>. Share it
         with them directly — they are not notified automatically.
       </p>
-      <input
-        type="password"
+      <PasswordInput
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         placeholder="New password (min 8 characters)"

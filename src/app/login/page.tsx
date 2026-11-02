@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { toast } from "@/store/toastStore";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { PasswordInput } from "@/components/PasswordInput";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -78,9 +79,7 @@ export default function LoginPage() {
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-foreground">Password</label>
-              <input
-                type="password"
-                className="w-full rounded-xl border border-border px-4 py-3.5 text-base outline-none focus:border-brand-secondary focus:ring-1 focus:ring-brand-secondary"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
